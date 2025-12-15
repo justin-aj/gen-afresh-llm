@@ -276,6 +276,9 @@ def get_tokenizer(name_or_path: str) -> BaseTokenizer:
     if name_or_path == "simple":
         return SimpleTokenizer()
     
+    if name_or_path == "gpt2" or name_or_path == "tiktoken":
+        return TiktokenTokenizer("gpt2")
+    
     if name_or_path.startswith("tiktoken:"):
         encoding_name = name_or_path.split(":")[1]
         return TiktokenTokenizer(encoding_name)

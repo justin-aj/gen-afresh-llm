@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from config import LLMConfig
 from model import LLM
 from tokenizer import get_tokenizer, BaseTokenizer
+from datasets import load_dataset
+from dataset import HFTextDataset
+from torch.utils.data import Dataset as TorchDataset
+
 
 
 # ============================================================
@@ -277,7 +281,9 @@ def train(
     model_config: LLMConfig,
     train_config: TrainConfig,
     tokenizer: BaseTokenizer,
-    resume_from: Optional[str] = None
+    resume_from: Optional[str] = None,
+    hf_train_dataset: Optional[TorchDataset] = None,
+    hf_val_dataset: Optional[TorchDataset] = None,
 ):
     """
     Main training function.
@@ -294,6 +300,12 @@ def train(
     
     # Create model
     print("\nInitializing model...")
+    # Ensure model vocab matches tokenizer (avoid embedding index out of range)
+    if hasattr(tokenizer, "vocab_size"):
+        if tokenizer.vocab_size != model_config.vocab_size:
+            print(f"Adjusting model_config.vocab_size {model_config.vocab_size} -> {tokenizer.vocab_size}")
+            model_config.vocab_size = tokenizer.vocab_size
+
     model = LLM(model_config)
     model = model.to(train_config.device)
     print(model)
@@ -336,12 +348,15 @@ def train(
     
     # Create datasets
     print("\nLoading datasets...")
-    train_dataset = TextDataset(
-        train_config.data_path,
-        tokenizer,
-        model_config.max_seq_len
-    )
-    
+    if hf_train_dataset is not None:
+        train_dataset = HFTextDataset(hf_train_dataset, text_column="text", tokenizer=tokenizer, max_seq_len=model_config.max_seq_len)
+    else:
+        train_dataset = TextDataset(
+            train_config.data_path,
+            tokenizer,
+            model_config.max_seq_len
+        )
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=train_config.batch_size,
@@ -351,12 +366,15 @@ def train(
     )
     
     val_loader = None
-    if train_config.val_path:
-        val_dataset = TextDataset(
-            train_config.val_path,
-            tokenizer,
-            model_config.max_seq_len
-        )
+    if train_config.val_path or hf_val_dataset is not None:
+        if hf_val_dataset is not None:
+            val_dataset = HFTextDataset(hf_val_dataset, text_column="text", tokenizer=tokenizer, max_seq_len=model_config.max_seq_len)
+        else:
+            val_dataset = TextDataset(
+                train_config.val_path,
+                tokenizer,
+                model_config.max_seq_len
+            )
         val_loader = DataLoader(
             val_dataset,
             batch_size=train_config.batch_size,
@@ -463,50 +481,69 @@ if __name__ == "__main__":
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True)
     
-    train_file = data_dir / "train.txt"
-    if not train_file.exists():
-        print("Creating sample training data...")
-        sample_text = """
-The quick brown fox jumps over the lazy dog.
-Machine learning is a subset of artificial intelligence.
-Neural networks are inspired by the human brain.
-Large language models can generate human-like text.
-Training requires lots of data and compute power.
-Transformers use attention mechanisms to process sequences.
-The attention mechanism allows tokens to interact with each other.
-Self-attention computes relationships between all positions.
-""" * 100  # Repeat to have more data
+    train_file = data_dir / "train_bahubali.txt"
+
+    # Download data if missing
+    data_file = Path("data/train_tiny.txt")
+    if not data_file.exists():
+        print("Downloading training data...")
+        import urllib.request
+        import os
         
-        with open(train_file, "w") as f:
-            f.write(sample_text)
-        print(f"Created {train_file}")
+        os.makedirs("data", exist_ok=True)
+        
+        books = [
+            "https://www.gutenberg.org/files/1342/1342-0.txt",
+            "https://www.gutenberg.org/files/11/11-0.txt", 
+            "https://www.gutenberg.org/files/84/84-0.txt",
+            "https://www.gutenberg.org/files/1661/1661-0.txt",
+        ]
+        
+        all_text = []
+        for url in books:
+            print(f"  Downloading {url.split('/')[-1]}...")
+            text = urllib.request.urlopen(url).read().decode('utf-8-sig')
+            if "*** START OF" in text:
+                text = text.split("*** START OF", 1)[-1].split("\n", 1)[-1]
+            if "*** END OF" in text:
+                text = text.split("*** END OF", 1)[0]
+            all_text.append(text)
+        
+        with open(data_file, "w", encoding="utf-8") as f:
+            f.write("\n\n".join(all_text))
+        print(f"Saved to {data_file}")
     
     # Configurations
     model_config = LLMConfig(
-        vocab_size=256,  # Using simple tokenizer
-        hidden_size=256,
-        num_layers=4,
-        num_heads=4,
-        num_kv_heads=2,
-        intermediate_size=512,
-        max_seq_len=128,
+        vocab_size=100277,  # Using simple tokenizer
+        hidden_size=768,
+        num_layers=12,
+        num_heads=12,
+        num_kv_heads=4,
+        intermediate_size=2048,
+        max_seq_len=2048,
     )
     
     train_config = TrainConfig(
         data_path=str(train_file),
-        batch_size=4,
-        gradient_accumulation_steps=2,
-        max_steps=500,
-        learning_rate=1e-3,
-        warmup_steps=50,
-        log_interval=10,
-        save_interval=250,
+        batch_size=8,
+        gradient_accumulation_steps=4,
+        max_steps=10000,
+        learning_rate=3e-4,
+        warmup_steps=200,
+        log_interval=50,
+        save_interval=1000,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )
     
     # Simple tokenizer for testing
-    from tokenizer import SimpleTokenizer
-    tokenizer = SimpleTokenizer()
+    from tokenizer import TiktokenTokenizer
+    tokenizer = TiktokenTokenizer("cl100k_base")
     
     # Train!
-    train(model_config, train_config, tokenizer)
+    # train(model_config, train_config, tokenizer)
+
+    hf_train = load_dataset("agentlans/high-quality-english-sentences", split="train")
+    hf_test = load_dataset("agentlans/high-quality-english-sentences", split="test")
+
+    train(model_config, train_config, tokenizer, hf_train_dataset=hf_train, hf_val_dataset=hf_test)

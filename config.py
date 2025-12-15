@@ -7,7 +7,7 @@ class LLMConfig:
 
     # Determines the size of the embedding matrix, shape [vocab_size, hidden_size]
     # Large vocab_size can capture more nuance but increases model size
-    vocab_size: int = 32000 # Number of unique words
+    vocab_size: int = 100277 # Number of unique words
 
     # Dim of token embeddings and hidden states
     # Internal computations operate on vectors of this size 
@@ -36,3 +36,5 @@ class LLMConfig:
 
     # Scaling factor for Rotary Positional Embeddings (RoPE)
     rope_theta: float = 10000.0
+    
+    tie_embeddings: bool = True
