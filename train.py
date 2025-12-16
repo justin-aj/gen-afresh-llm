@@ -497,40 +497,61 @@ if __name__ == "__main__":
             "https://www.gutenberg.org/files/11/11-0.txt", 
             "https://www.gutenberg.org/files/84/84-0.txt",
             "https://www.gutenberg.org/files/1661/1661-0.txt",
+            "https://www.gutenberg.org/files/2701/2701-0.txt",  # Moby Dick
+            "https://www.gutenberg.org/files/1399/1399-0.txt",  # Anna Karenina
+            "https://www.gutenberg.org/files/98/98-0.txt",      # Tale of Two Cities
+            "https://www.gutenberg.org/files/74/74-0.txt",      # Tom Sawyer
+            "https://www.gutenberg.org/files/76/76-0.txt",      # Huckleberry Finn
+            "https://www.gutenberg.org/files/16/16-0.txt",      # Peter Pan
+            "https://www.gutenberg.org/files/5200/5200-0.txt",  # Metamorphosis
+            "https://www.gutenberg.org/files/1232/1232-0.txt",  # The Prince
+            "https://www.gutenberg.org/files/2542/2542-0.txt",  # A Doll's House
+            "https://www.gutenberg.org/files/174/174-0.txt",    # Dorian Gray
+            "https://www.gutenberg.org/files/345/345-0.txt",    # Dracula
         ]
         
         all_text = []
         for url in books:
-            print(f"  Downloading {url.split('/')[-1]}...")
-            text = urllib.request.urlopen(url).read().decode('utf-8-sig')
-            if "*** START OF" in text:
-                text = text.split("*** START OF", 1)[-1].split("\n", 1)[-1]
-            if "*** END OF" in text:
-                text = text.split("*** END OF", 1)[0]
-            all_text.append(text)
+            name = url.split("/")[-1]
+            print(f"Downloading {name}...")
+            try:
+                text = urllib.request.urlopen(url).read().decode('utf-8-sig')
+                
+                # Clean Gutenberg headers
+                if "*** START OF" in text:
+                    text = text.split("*** START OF", 1)[-1].split("\n", 1)[-1]
+                if "*** END OF" in text:
+                    text = text.split("*** END OF", 1)[0]
+                
+                all_text.append(text.strip())
+                print(f"  ✓ {len(text):,} chars")
+            except Exception as e:
+                print(f"  ✗ Failed: {e}")
+        
+        combined = "\n\n".join(all_text)
         
         with open(data_file, "w", encoding="utf-8") as f:
-            f.write("\n\n".join(all_text))
+            f.write(combined)
         print(f"Saved to {data_file}")
     
     # Configurations
     model_config = LLMConfig(
-        vocab_size=100277,  # Using simple tokenizer
+        vocab_size=50257,  
         hidden_size=768,
-        num_layers=12,
+        num_layers=6,
         num_heads=12,
         num_kv_heads=4,
         intermediate_size=2048,
-        max_seq_len=2048,
+        max_seq_len=512,
     )
     
     train_config = TrainConfig(
         data_path=str(train_file),
         batch_size=8,
         gradient_accumulation_steps=4,
-        max_steps=10000,
-        learning_rate=3e-4,
-        warmup_steps=200,
+        max_steps=50000,
+        learning_rate=1e-4,
+        warmup_steps=500,
         log_interval=50,
         save_interval=1000,
         device="cuda" if torch.cuda.is_available() else "cpu",
@@ -538,7 +559,7 @@ if __name__ == "__main__":
     
     # Simple tokenizer for testing
     from tokenizer import TiktokenTokenizer
-    tokenizer = TiktokenTokenizer("cl100k_base")
+    tokenizer = TiktokenTokenizer("gpt2")
     
     # Train!
     # train(model_config, train_config, tokenizer)

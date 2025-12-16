@@ -1,6 +1,9 @@
 from datasets import load_dataset, Dataset as HFDataset
 from torch.utils.data import Dataset as TorchDataset
 import torch
+from tokenizer import BaseTokenizer
+from typing import List, Optional, Union
+
 
 class HFTextDataset(TorchDataset):  # Changed from HFDataset to TorchDataset
     """Wrap a HuggingFace Dataset (text column) into the same chunked token dataset used by train.py"""

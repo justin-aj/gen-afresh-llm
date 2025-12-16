@@ -129,7 +129,13 @@ class Attention(nn.Module):
         # Step 10: Apply attention to values
         # (batch, num_heads, seq_len, kv_seq_len) @ (batch, num_heads, kv_seq_len, head_dim)
         # = (batch, num_heads, seq_len, head_dim)
-        output = torch.matmul(attn_weights, v)
+        output = F.scaled_dot_product_attention(
+                q, 
+                k, 
+                v, 
+                dropout_p=0.1,
+                is_causal=True  # Important for LLMs (masked attention)
+            )
         
         # Step 11: Reshape back: (batch, seq_len, num_heads * head_dim)
         output = output.transpose(1, 2).contiguous()
