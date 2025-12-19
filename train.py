@@ -336,6 +336,8 @@ def train(
     )
     
     # Mixed precision scaler (for GPU training)
+    # Speeds up training because 16-bit computations are faster on modern GPUs (especially NVIDIA Tensor Cores).
+    # Reduces GPU memory usage, allowing larger batch sizes or models.
     scaler = None
     if train_config.device == "cuda":
         scaler = torch.cuda.amp.GradScaler()
